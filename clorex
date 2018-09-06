@@ -115,6 +115,10 @@ while test -n "$1" ; do
 			nodelete=true
 			noupdate=true
 			;;
+		--clean-only | --clean | -c)
+			noinstall=true
+			noupdate=true
+			;;
 		*)
 			printf '%s: Unrecognized command line option: %s\n0' "$0" "$1" 1>&2
 			exit 1

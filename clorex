@@ -13,6 +13,16 @@ MNIFST="${VIMDIR}/plugins"
 noupdate=false
 nodelete=false
 noinstall=false
+isnvim=false
+isvim=true
+
+xvim () {
+	if ${isnvim} ; then
+		nvim "$@" < /dev/null > /dev/null
+	else
+		vim "$@" < /dev/null > /dev/null
+	fi
+}
 
 rows () {
 	local size=$(stty size < /dev/tty)
@@ -152,6 +162,14 @@ while test -n "$1" ; do
 			noinstall=true
 			noupdate=true
 			;;
+		--nvim)
+			isnvim=true
+			isvim=false
+			;;
+		--vim)
+			isnvim=false
+			isvim=true
+			;;
 		*)
 			printf '%s: Unrecognized command line option: %s\n0' "$0" "$1" 1>&2
 			exit 1
@@ -180,6 +198,6 @@ each item
 
 # Update Vim help tags.
 info 'updating help tags'
-vim -u NONE -c 'helptags ALL' -c q > /dev/null < /dev/null
+xvim -u NONE -c 'helptags ALL' -c q
 
 info 'done'

@@ -10,6 +10,9 @@ set -e
 VIMDIR="${VIMDIR:-${HOME}/.vim}"
 CLXDIR="${CLOREX:-${VIMDIR}/pack/clorex/start}"
 MNIFST="${VIMDIR}/plugins"
+noupdate=false
+nodelete=false
+noinstall=false
 
 expn () {
 	# Tilde followed by slash.
@@ -90,11 +93,11 @@ item () {
 	local A=$(pdir "$N")
 
 	if test -d "$P" ; then
-		link "$N" "$P" "$A"
+		${noinstall} || link "$N" "$P" "$A"
 	elif test -d "$A" ; then
-		pull "$N" "$A"
+		${noupdate} || pull "$N" "$A"
 	else
-		clon "$N" "$U" "$A"
+		${noinstall} || clon "$N" "$U" "$A"
 	fi
 }
 
@@ -104,18 +107,38 @@ ckrm () {
 	fi
 }
 
-printf ':: \e[1;32mclorex\e[0;0m: checking for deleted plugins...\n'
-if test -d "${CLXDIR}" ; then
-	for dirpath in "${CLXDIR}"/* ; do
-		if test -h "${dirpath}" || test -d "${dirpath}" ; then
-			if test -z "$(each ckrm "$(basename "${dirpath}")")" ; then
-				printf ':: \e[1;32m%s\e[0;0m: deleted.\n' \
-					"$(basename "${dirpath}")"
-				rm -rf "${dirpath}"
+
+# Parse command line options.
+while test -n "$1" ; do
+	case $1 in
+		--install-only | --install | -i)
+			nodelete=true
+			noupdate=true
+			;;
+		*)
+			printf '%s: Unrecognized command line option: %s\n0' "$0" "$1" 1>&2
+			exit 1
+			;;
+	esac
+	shift
+done
+
+
+${nodelete} || {
+	printf ':: \e[1;32mclorex\e[0;0m: checking for deleted plugins...\n'
+	if test -d "${CLXDIR}" ; then
+		for dirpath in "${CLXDIR}"/* ; do
+			if test -h "${dirpath}" || test -d "${dirpath}" ; then
+				if test -z "$(each ckrm "$(basename "${dirpath}")")" ; then
+					printf ':: \e[1;32m%s\e[0;0m: deleted.\n' \
+						"$(basename "${dirpath}")"
+					rm -rf "${dirpath}"
+				fi
 			fi
-		fi
-	done
-fi
+		done
+	fi
+}
+
 each item
 
 # Update Vim help tags.

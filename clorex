@@ -162,6 +162,10 @@ while test -n "$1" ; do
 			noinstall=true
 			noupdate=true
 			;;
+		--update-only | --update | -u)
+			noinstall=true
+			nodelete=true
+			;;
 		--nvim)
 			isnvim=true
 			isvim=false

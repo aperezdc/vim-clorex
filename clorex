@@ -1,0 +1,122 @@
+#! /bin/sh
+#
+# clorex
+# Copyright (C) 2018 Adrian Perez de Castro <aperez@igalia.com>
+#
+# Distributed under terms of the MIT license.
+#
+set -e
+
+VIMDIR="${VIMDIR:-${HOME}/.vim}"
+CLXDIR="${CLOREX:-${VIMDIR}/pack/clorex/start}"
+MNIFST="${VIMDIR}/plugins"
+
+expn () {
+	# Tilde followed by slash.
+	if expr "${1}" : '\~\/.*' > /dev/null ; then
+		echo "${HOME}${1#\~}"
+	else
+		echo "${1}"
+	fi
+}
+
+repo () {
+	local scheme=$(expr "${1}" : '\([^:/]\)://')
+
+	if test "${scheme}" = http || test "${scheme}" = https ; then
+		echo "${1}.git"
+	elif expr "${1}" : '[^/][^/]*/[^/][^/]*$' > /dev/null ; then
+		echo "https://github.com/${1}.git"
+	else
+		echo ''
+	fi
+}
+
+name () {
+	expr "$1" : '.*/\([^/][^/]*\)$' || echo "$1"
+}
+
+pdir () {
+	echo "${CLXDIR}/$1"
+}
+
+each () {
+	local N U P F=$1
+	shift
+	while read -r U P; do
+		if expr "x$U" : 'x[[:space:]]*$' > /dev/null ; then
+			continue
+		elif expr "$U" : '[[:space:]]*\#' > /dev/null ; then
+			continue
+		fi
+		N=$(name "$U")
+		if test -z "$N" ; then
+			N=$(name "$P")
+		fi
+		U=$(repo "$U")
+		P=$(expn "$P")
+		"$F" "$N" "$U" "$P" "$@"
+	done < "${MNIFST}"
+}
+
+pull () {
+	cd "$2"
+	local branch=$(git symbolic-ref --short HEAD)
+	local upstream=$(git ls-remote --heads origin "${branch}" | awk '{ print $1 }')
+	local installed=$(git rev-parse "${branch}")
+	if test "${upstream}" = "${installed}" ; then
+		printf ':: \e[1;32m%s\e[0;0m: no updates.\n' "$1"
+	else
+		git pull
+		local commits=$(git rev-list --left-only --count "${upstream}...${installed}")
+		printf ':: \e[1;32m%s\e[0;0m: %d new commits(d)\n' "$1" "${commits}"
+	fi
+}
+
+clon () {
+	printf ':: \e[1;32m%s\e[0;0m: installing \e[36m%s\e[0;0m...\n' "$1" "$2"
+	git clone --depth 1 "$2" "$3"
+}
+
+link () {
+	printf ':: \e[1;32m%s\e[0;0m: symlink \e[36m%s\e[0;0m.\n' "$1" "$2"
+	test -h "$3" || ln -s "$2" "$3"
+}
+
+item () {
+	local N=$1
+	local U=$2
+	local P=$3
+	local A=$(pdir "$N")
+
+	if test -d "$P" ; then
+		link "$N" "$P" "$A"
+	elif test -d "$A" ; then
+		pull "$N" "$A"
+	else
+		clon "$N" "$U" "$A"
+	fi
+}
+
+ckrm () {
+	if test "$1" = "$4" ; then
+		printf "$1"
+	fi
+}
+
+printf ':: \e[1;32mclorex\e[0;0m: checking for deleted plugins...\n'
+if test -d "${CLXDIR}" ; then
+	for dirpath in "${CLXDIR}"/* ; do
+		if test -h "${dirpath}" || test -d "${dirpath}" ; then
+			if test -z "$(each ckrm "$(basename "${dirpath}")")" ; then
+				printf ':: \e[1;32m%s\e[0;0m: deleted.\n' \
+					"$(basename "${dirpath}")"
+				rm -rf "${dirpath}"
+			fi
+		fi
+	done
+fi
+each item
+
+# Update Vim help tags.
+vim -u NONE -c 'helptags ALL' -c q

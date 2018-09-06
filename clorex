@@ -14,6 +14,38 @@ noupdate=false
 nodelete=false
 noinstall=false
 
+rows () {
+	local size=$(stty size < /dev/tty)
+	set -- ${size}
+	echo "$2"
+}
+
+fini () {
+	# Reset scroll region, clear screen.
+	printf '\e[r\e[1;1H\e[J'
+}
+
+init () {
+	trap fini EXIT
+	# Go to (1,1), clear screen, set scroll region, move to (2,1).
+	printf '\e[1;1H\e[J\e[2;%dr\e[3;1H' "$(rows)"
+	info 'initializing'
+}
+
+info () {
+	# Save position, go to the status line at (1,1), echo, and restore.
+	printf '\e7\e[1;1H:: \e[1;32mclorex\e[0;0m :: \e[K'
+	printf "$@"
+	printf '\e8'
+}
+
+ilog () {
+	printf ':: \e[1;1m%s\e[0;0m: ' "$1"
+	shift
+	printf "$@"
+	printf '\e[0;0m'
+}
+
 expn () {
 	# Tilde followed by slash.
 	if expr "${1}" : '\~\/.*' > /dev/null ; then
@@ -58,6 +90,7 @@ each () {
 		fi
 		U=$(repo "$U")
 		P=$(expn "$P")
+		info 'installing/updating: %s' "$N"
 		"$F" "$N" "$U" "$P" "$@"
 	done < "${MNIFST}"
 }
@@ -68,21 +101,21 @@ pull () {
 	local upstream=$(git ls-remote --heads origin "${branch}" | awk '{ print $1 }')
 	local installed=$(git rev-parse "${branch}")
 	if test "${upstream}" = "${installed}" ; then
-		printf ':: \e[1;32m%s\e[0;0m: no updates.\n' "$1"
+		ilog "$1" 'no updates.\n'
 	else
 		git pull
 		local commits=$(git rev-list --left-only --count "${upstream}...${installed}")
-		printf ':: \e[1;32m%s\e[0;0m: %d new commits(d)\n' "$1" "${commits}"
+		ilog "$1" '%d new commit(s).\n' "${commits}"
 	fi
 }
 
 clon () {
-	printf ':: \e[1;32m%s\e[0;0m: installing \e[36m%s\e[0;0m...\n' "$1" "$2"
+	ilog "$1" 'installing from \e[36m%s\e[0;0m.\n' "$2"
 	git clone --depth 1 "$2" "$3"
 }
 
 link () {
-	printf ':: \e[1;32m%s\e[0;0m: symlink \e[36m%s\e[0;0m.\n' "$1" "$2"
+	ilog "$1" 'symlink \e[36m%s\e[0;0m.\n' "$2"
 	test -h "$3" || ln -s "$2" "$3"
 }
 
@@ -127,15 +160,15 @@ while test -n "$1" ; do
 	shift
 done
 
+init
 
 ${nodelete} || {
-	printf ':: \e[1;32mclorex\e[0;0m: checking for deleted plugins...\n'
 	if test -d "${CLXDIR}" ; then
 		for dirpath in "${CLXDIR}"/* ; do
 			if test -h "${dirpath}" || test -d "${dirpath}" ; then
+				info 'checking: %s' "$(basename "${dirpath}")"
 				if test -z "$(each ckrm "$(basename "${dirpath}")")" ; then
-					printf ':: \e[1;32m%s\e[0;0m: deleted.\n' \
-						"$(basename "${dirpath}")"
+					ilog "$(basename "${dirpath}")" 'deleted.\n'
 					rm -rf "${dirpath}"
 				fi
 			fi
@@ -146,4 +179,7 @@ ${nodelete} || {
 each item
 
 # Update Vim help tags.
-vim -u NONE -c 'helptags ALL' -c q
+info 'updating help tags'
+vim -u NONE -c 'helptags ALL' -c q > /dev/null < /dev/null
+
+info 'done'
